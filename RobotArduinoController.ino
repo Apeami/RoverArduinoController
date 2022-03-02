@@ -3,35 +3,6 @@
 //Pin 10 - OCR1B - Rover Right Side
 //Pin A0-5 -  used for the inputs from the controller
 
-int getControllerValue(int pin){
-  //returns value between 0 and 255
-
-  //Constants that come from the control stick
-  const int minInput = 0;
-  const int maxInput = 5000;
-
-  //Read the analog value at the pin using the built in analog read function
-  int val=0;
-  const int times = 50;
-
-  
-  while(analogRead(pin)>10);
-  long time1=millis();
-  while(analogRead(pin)<10);
-  while(analogRead(pin)>10);
-  Serial.println(millis()-time1);
-  Serial.println(millis());
-
-  //Checks to see if the analog reading is within the correct range that is 
-  //expected to come from the control stick
-  if (val>maxInput || val<minInput){
-    return -1; //Error not expected value
-  }
-
-  //Scales the value to the desired range
-  return ((val-minInput)*(255/(maxInput-minInput)));
-}
-
 void setupControllerReader(){
   pinMode(2, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(2), readerHigh2, RISING);
@@ -45,7 +16,7 @@ void readerHigh2(){
    //Serial.println("H");
 }
 
-int getControllerValue2(int pin){
+int getControllerValue(int pin){
   if (pin==2){
     return value2;
   }
@@ -88,6 +59,6 @@ void loop() {
   //Desired frequency = 50Hz
   
   Serial.println("Message");
-  Serial.println(getControllerValue2(2),DEC);
+  Serial.println(getControllerValue(2),DEC);
   //controlMotor(0, -100);
 }
