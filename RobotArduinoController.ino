@@ -3,10 +3,44 @@
 //Pin 10 - OCR1B - Rover Right Side
 //Pin A0-5 -  used for the inputs from the controller
 
+void pciSetup(byte pin){
+    *digitalPinToPCMSK(pin) |= bit (digitalPinToPCMSKbit(pin));  // enable pin
+    PCIFR  |= bit (digitalPinToPCICRbit(pin));                   // clear any outstanding interrupt
+    PCICR  |= bit (digitalPinToPCICRbit(pin));                   // enable interrupt for the group
+}
+const int pwmPIN[]={A0,A1,A2,A3,A4};
+const int num_ch = 5;
+int prev_pinState[num_ch];
+int pwmTimer[num_ch];
+int pwmPeriod[num_ch];
+int PW[num_ch];
+int pwmPIN_reg[num_ch];
+
+int pciTime;
+
+ISR(PCINT1_vect){                                                 // this function will run if a pin change is detected on portC
+
+  pciTime = micros();                                             // Record the time of the PIN change in microseconds
+
+  for (int i = 0; i < num_ch; i++){                               // run through each of the channels                                    
+      if(prev_pinState[i] == 0 && PINC & pwmPIN_reg[i]){          // and the pin state has changed from LOW to HIGH (start of pulse)
+        prev_pinState[i] = 1;                                     // record pin state
+        pwmPeriod[i] = pciTime - pwmTimer[i];                     // calculate the time period, micro sec, between the current and previous pulse
+        pwmTimer[i] = pciTime;                                    // record the start time of the current pulse
+      }
+      else if (prev_pinState[i] == 1 && !(PINC & pwmPIN_reg[i])){ // or the pin state has changed from HIGH to LOW (end of pulse)
+        prev_pinState[i] = 0;                                     // record pin state
+        PW[i] = pciTime - pwmTimer[i];                             // calculate the duration of the current pulse
+      }   
+  }
+}
+
 void setupControllerReader(){
   //Sets pin to input and sets-up the interrupt
-  pinMode(2, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(2), readerHigh2, RISING);
+  //Pin interrupt setup
+  for(int i = 0; i < num_ch; i++){              
+    pciSetup(pwmPIN[i]);                       
+  }
 }
 
 //BTW these functions are not working
@@ -49,15 +83,27 @@ void controlMotor(int side, int motorSpeed){
   const int maxValue=126;
   const int range=maxValue-minValue;
 
-  //Set motor speed range from 0 to 200
-  motorSpeed+=100;
+  const int maxSpeed = 200;
+  const int minSpeed = 0;
+  const int speedRange = maxSpeed-minSpeed;
+
+  //Ensure that motor speed is within bounds
+  if (motorSpeed>maxSpeed){motorSpeed=maxSpeed;}
+  if (motorSpeed<minSpeed){motorSpeed=minSpeed;}
+
 
   //Choose the side, this changes the variable to write too
   //It also sets ORC variable so it is mapped within the range of values
+  
+  // ((motorSpeed*range)/200)+minValue
   if (side==0){
-    OCR1A = ((motorSpeed/200)*range)+minValue;
+    OCR1A =0;
+    delay(1000);
+    OCR1A = ((motorSpeed*range)/speedRange)+minValue;
   }if (side==1){
-    OCR1B = ((motorSpeed/200)*range)+minValue;
+    OCR1B =0;
+    delay(1000);
+    OCR1B = ((motorSpeed*range)/speedRange)+minValue;
   }
 }
 
@@ -70,16 +116,24 @@ void setup() {
 }
 
 void loop() {
+  static int motorPower = 100;
+  static int debounce=0;
   //Desired frequency = 50Hz
-  int motorPower=0;
-  char* incomingByte;
-
   //Read byte from serial and set as motor power
+
+  
   if (Serial.available() > 0) {
-    incomingByte = Serial.read();
-    motorPower=atoi(incomingByte)
+    if (debounce==0){
+      motorPower=Serial.parseInt();
+      controlMotor(0, motorPower);
+      controlMotor(1, motorPower);
+      debounce=1;
+     }else{
+      Serial.parseInt();
+      debounce=0;
+     }  
   }
-  controlMotor(0, motorPower);
+
 
   //Read from remote controller 
   //Serial.println("Message");
