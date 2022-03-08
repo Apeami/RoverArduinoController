@@ -11,26 +11,30 @@ void pciSetup(byte pin){
 const int pwmPIN[]={A0,A1,A2,A3,A4};
 const int num_ch = 5;
 int prev_pinState[num_ch];
+
 int pwmTimer[num_ch];
-int pwmPeriod[num_ch];
-int PW[num_ch];
-int pwmPIN_reg[num_ch];
+int timeHigh[num_ch];
+int timeLow[num_ch];
 
 int pciTime;
 
-ISR(PCINT1_vect){                                                 // this function will run if a pin change is detected on portC
-
-  pciTime = micros();                                             // Record the time of the PIN change in microseconds
-
-  for (int i = 0; i < num_ch; i++){                               // run through each of the channels                                    
-      if(prev_pinState[i] == 0 && PINC & pwmPIN_reg[i]){          // and the pin state has changed from LOW to HIGH (start of pulse)
-        prev_pinState[i] = 1;                                     // record pin state
-        pwmPeriod[i] = pciTime - pwmTimer[i];                     // calculate the time period, micro sec, between the current and previous pulse
-        pwmTimer[i] = pciTime;                                    // record the start time of the current pulse
+ISR(PCINT1_vect){                                                 
+  pciTime = micros();                                             
+  for (int i = 0; i < num_ch; i++){                              
+      int state = digitalRead(pwmPIN[i]);                               
+      if(prev_pinState[i] == 0 && state){                         
+        prev_pinState[i] = 1; 
+                                          
+        timeLow[i] = pciTime - pwmTimer[i];                     
+        pwmTimer[i] = pciTime; 
+        //Serial.println(timeLow[i]);                                      
       }
-      else if (prev_pinState[i] == 1 && !(PINC & pwmPIN_reg[i])){ // or the pin state has changed from HIGH to LOW (end of pulse)
-        prev_pinState[i] = 0;                                     // record pin state
-        PW[i] = pciTime - pwmTimer[i];                             // calculate the duration of the current pulse
+      else if (prev_pinState[i] == 1 && !state){                  
+        prev_pinState[i] = 0; 
+                                            
+        timeHigh[i] = pciTime - pwmTimer[i];    
+        pwmTimer[i] = pciTime;   
+        //Serial.println(timeHigh[i]);                     
       }   
   }
 }
@@ -39,26 +43,10 @@ void setupControllerReader(){
   //Sets pin to input and sets-up the interrupt
   //Pin interrupt setup
   for(int i = 0; i < num_ch; i++){              
-    pciSetup(pwmPIN[i]);                       
+    pciSetup(pwmPIN[i]);  
+    pinMode(pwmPIN[i],INPUT);                    
   }
 }
-
-//BTW these functions are not working
-//These are global variables
-int value2=0;
-long timeLast2=0;
-void readerHigh2(){
-   //Get the change in time from the last
-   value2= millis()-timeLast2;
-   timeLast2 = timeLast2+value2;
-}
-
-int getControllerValue(int pin){
-  if (pin==2){
-    return value2;
-  }
-}
-
 
 void setupMotorDriver(){
   //Sets the pins into output mode
@@ -118,10 +106,8 @@ void setup() {
 void loop() {
   static int motorPower = 100;
   static int debounce=0;
-  //Desired frequency = 50Hz
   //Read byte from serial and set as motor power
 
-  
   if (Serial.available() > 0) {
     if (debounce==0){
       motorPower=Serial.parseInt();
@@ -134,9 +120,9 @@ void loop() {
      }  
   }
 
+  Serial.println(timeHigh[0]);
+  Serial.println(timeLow[0]);
 
-  //Read from remote controller 
-  //Serial.println("Message");
-  //Serial.println(getControllerValue(2),DEC);
-  //controlMotor(0, -100);
+  //Delay for smoothness
+  delay(1000);
 }
