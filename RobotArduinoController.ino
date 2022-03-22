@@ -1,3 +1,6 @@
+#include <AFMotor.h>
+#include <Servo.h>
+
 //Pins used in this program
 //Pin 9 - OCR1A - Rover Left Side
 //Pin 10 - OCR1B - Rover Right Side
@@ -71,8 +74,8 @@ void controlMotor(int side, int motorSpeed){
   const int maxValue=126;
   const int range=maxValue-minValue;
 
-  const int maxSpeed = 200;
-  const int minSpeed = 0;
+  const int maxSpeed = 255;
+  const int minSpeed = -255;
   const int speedRange = maxSpeed-minSpeed;
 
   //Ensure that motor speed is within bounds
@@ -87,23 +90,61 @@ void controlMotor(int side, int motorSpeed){
   if (side==0){
     OCR1A =0;
     delay(1000);
-    OCR1A = ((motorSpeed*range)/speedRange)+minValue;
+    OCR1A = (((motorSpeed-minSpeed)*range)/speedRange)+minValue;
   }if (side==1){
     OCR1B =0;
     delay(1000);
-    OCR1B = ((motorSpeed*range)/speedRange)+minValue;
+    OCR1B = (((motorSpeed-minSpeed)*range)/speedRange)+minValue;
+  }
+}
+
+int calculateDutyCycle(int A, int B){
+  return (A*100)/(A+B);
+}
+
+AF_DCMotor motor1(1, MOTOR12_64KHZ);
+AF_DCMotor motor2(2, MOTOR12_64KHZ);
+void controlHMotor(int side, int motorSpeed){
+  if (side==0){
+    if (motorSpeed==0){motor1.run(RELEASE);return;}
+    if (motorSpeed>0){motor1.run(FORWARD);}
+    if (motorSpeed<0){motor1.run(BACKWARD);}
+    motor1.setSpeed(abs(motorSpeed));
+  }
+    if (side==1){
+    if (motorSpeed==0){motor2.run(RELEASE);return;}
+    if (motorSpeed>0){motor2.run(FORWARD);}
+    if (motorSpeed<0){motor2.run(BACKWARD);}
+    motor2.setSpeed(abs(motorSpeed));
+  }
+  return;
+}
+
+Servo ESC1;
+Servo ESC2;
+void controlESC(int side, int motorSpeed){
+  motorSpeed = map(motorSpeed, -255, 255, 0, 180);
+  if (side==0){
+    ESC1.write(motorSpeed);
+  }
+  if (side==0){
+    ESC2.write(motorSpeed);
   }
 }
 
 
 void setup() {
   Serial.begin(9600);
+  motor.setSpeed(0);
+  ESC1.attach(10,1000,2000);
+  ESC2.attach(11,1000,2000);
   setupMotorDriver();
   setupControllerReader();
 
 }
 
 void loop() {
+  static int potValue;
   static int motorPower = 100;
   static int debounce=0;
   //Read byte from serial and set as motor power
@@ -113,6 +154,10 @@ void loop() {
       motorPower=Serial.parseInt();
       controlMotor(0, motorPower);
       controlMotor(1, motorPower);
+      controlHMotor(0, motorPower);
+      controlHMotor(1, motorPower);
+      controlESC(0, motorPower);
+      controlESC(1, motorPower);
       debounce=1;
      }else{
       Serial.parseInt();
@@ -124,5 +169,5 @@ void loop() {
   Serial.println(timeLow[0]);
 
   //Delay for smoothness
-  delay(1000);
+  delay(100);
 }
